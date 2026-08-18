@@ -27,7 +27,7 @@ services:
       - 'forgejo-timezone:/etc/timezone:ro'
       - 'forgejo-localtime:/etc/localtime:ro'
     ports:
-      - '22222:22'
+      - '0.0.0.0:22222:22'
     depends_on:
       postgresql:
         condition: service_healthy
@@ -40,23 +40,6 @@ services:
       interval: 2s
       timeout: 10s
       retries: 15
-    restart: unless-stopped
-
-  postgresql:
-    image: 'postgres:16-alpine'
-    volumes:
-      - 'forgejo-postgresql-data:/var/lib/postgresql/data'
-    environment:
-      - 'POSTGRES_USER=${SERVICE_USER_POSTGRESQL}'
-      - 'POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRESQL}'
-      - 'POSTGRES_DB=${POSTGRESQL_DATABASE}'
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}'
-      interval: 5s
-      timeout: 20s
-      retries: 10
     restart: unless-stopped
 
   forgejo-runner:
@@ -99,6 +82,23 @@ services:
             --labels "$$FORGEJO_RUNNER_LABELS"
         fi
         exec forgejo-runner daemon
+    restart: unless-stopped
+
+  postgresql:
+    image: 'postgres:16-alpine'
+    volumes:
+      - 'forgejo-postgresql-data:/var/lib/postgresql/data'
+    environment:
+      - 'POSTGRES_USER=${SERVICE_USER_POSTGRESQL}'
+      - 'POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRESQL}'
+      - 'POSTGRES_DB=${POSTGRESQL_DATABASE}'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}'
+      interval: 5s
+      timeout: 20s
+      retries: 10
     restart: unless-stopped
 
 volumes:

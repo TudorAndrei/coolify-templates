@@ -58,7 +58,7 @@ log "depozit la $(git rev-parse --short HEAD)"
 env_args=()
 if [ -n "${MACRO_ENV_OVERLAY:-}" ]; then
   log "scriu $ENV_OVERLAY din variabila MACRO_ENV_OVERLAY"
-  printf '%s\n' "$MACRO_ENV_OVERLAY" > "$ENV_OVERLAY"
+  printf '%s\n' "$MACRO_ENV_OVERLAY" >"$ENV_OVERLAY"
 fi
 if [ -s "$ENV_OVERLAY" ]; then
   log "suprapun $ENV_OVERLAY"

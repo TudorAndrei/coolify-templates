@@ -31,6 +31,34 @@ No credential belongs in this repository. Anything secret is referenced as
 The READMEs are written in Romanian; the comments in the compose files are in
 English.
 
+## Git hooks
+
+[hk](https://hk.jdx.dev) runs the checks on every commit. `mise install` installs
+the hooks, so a fresh clone needs nothing else.
+
+The two that matter here are `gitleaks` and `detect-private-key`. Every file in
+this repository is public, and a Coolify template is exactly the kind of file
+where a real token gets pasted "just to test it" and then committed.
+
+Both are overridden with `glob = "**/*"` and an empty `types` list. The builtins
+default to `types = ["text"]`, and hk does not classify a `.pem` as text — the
+step then gets zero files, hk skips it, and the commit goes through. A lone
+`secret.pem` holding an RSA private key committed cleanly until that was fixed.
+
+The rest: `dclint` and `hadolint` for the compose files and the Dockerfile,
+`shellcheck` and `shfmt` for `macro/entrypoint.sh`, `rumdl` for the Markdown,
+and a conventional-commit check on the message.
+
+`typos` is deliberately absent — the READMEs and the shell comments are in
+Romanian and its dictionary is English.
+
+Run everything by hand with `hk check --all`, or fix what is fixable with
+`hk fix --all`.
+
+Four `dclint` rules are disabled in `.dclintrc`, each with the reason in the
+file. They fight Coolify's own output conventions rather than describing real
+defects.
+
 ## License
 
 MIT
