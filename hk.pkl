@@ -7,13 +7,21 @@ local linters = new Mapping<String, Step | Group> {
     // The two that matter most here. Every compose file in this repo is
     // published publicly, and a Coolify template is exactly the kind of file
     // where a real token gets pasted "just to test it" and then committed.
-    // `glob` is forced to `**/*` on both. Without it hk filters the file list
-    // per step, and a commit whose only file is filtered out leaves the step
-    // with zero files — hk then SKIPS the step and the commit goes through.
-    // Verified: a lone `secret.pem` holding an RSA private key committed
-    // cleanly until this glob was set.
-    ["gitleaks"] = (Builtins.gitleaks) { glob = List("**/*") }
-    ["detect-private-key"] = (Builtins.detect_private_key) { glob = List("**/*") }
+    // Both builtins ship `types = List("text")`, and hk does not classify a
+    // `.pem` as text. The step then receives zero files, hk skips it, and the
+    // commit succeeds. Verified before this override: a lone `secret.pem`
+    // holding an RSA private key committed cleanly.
+    //
+    // Clearing `types` and widening `glob` makes both steps see every file.
+    // These are the two checks that must never be the ones that get skipped.
+    ["gitleaks"] = (Builtins.gitleaks) {
+        glob = List("**/*")
+        types = List()
+    }
+    ["detect-private-key"] = (Builtins.detect_private_key) {
+        glob = List("**/*")
+        types = List()
+    }
 
     ["check-merge-conflict"] = Builtins.check_merge_conflict
     ["check-added-large-files"] = Builtins.check_added_large_files
