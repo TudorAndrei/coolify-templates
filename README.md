@@ -12,7 +12,6 @@ variables that matter, the traps, and what breaks first.
 | [`forgejo/`](forgejo/) | Forgejo forge, PostgreSQL, and an Actions runner |
 | [`hermes/`](hermes/) | Nous Research Hermes agent |
 | [`macro/`](macro/) | Macro, with a custom image |
-| [`open-seo/`](open-seo/) | Open SEO |
 
 ## Usage
 
