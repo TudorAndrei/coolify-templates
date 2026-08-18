@@ -1,0 +1,109 @@
+services:
+  forgejo:
+    image: 'codeberg.org/forgejo/forgejo:8'
+    environment:
+      - SERVICE_URL_FORGEJO_3000
+      - 'FORGEJO__server__ROOT_URL=${SERVICE_URL_FORGEJO}'
+      - 'FORGEJO__migrations__ALLOWED_DOMAINS=${FORGEJO__migrations__ALLOWED_DOMAINS}'
+      - 'FORGEJO__migrations__ALLOW_LOCALNETWORKS=${FORGEJO__migrations__ALLOW_LOCALNETWORKS-false}'
+      - USER_UID=1000
+      - USER_GID=1000
+      - FORGEJO__database__DB_TYPE=postgres
+      - FORGEJO__database__HOST=postgresql
+      - 'FORGEJO__database__NAME=${POSTGRESQL_DATABASE-forgejo}'
+      - FORGEJO__database__USER=$SERVICE_USER_POSTGRESQL
+      - FORGEJO__service__DISABLE_REGISTRATION=true
+      - FORGEJO__service__REQUIRE_SIGNIN_VIEW=true
+      - FORGEJO__database__PASSWD=$SERVICE_PASSWORD_POSTGRESQL
+      - FORGEJO__server__DOMAIN=forgejo.tudorandrei.xyz
+      - FORGEJO__server__SSH_DOMAIN=forgejo.tudorandrei.xyz
+      - FORGEJO__server__SSH_PORT=22222
+      - FORGEJO__server__SSH_LISTEN_PORT=22
+      # Explicit, so the runner cannot connect to a server that silently
+      # accepts it and then never dispatches a job.
+      - FORGEJO__actions__ENABLED=true
+    volumes:
+      - 'forgejo-data:/data'
+      - 'forgejo-timezone:/etc/timezone:ro'
+      - 'forgejo-localtime:/etc/localtime:ro'
+    ports:
+      - '22222:22'
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - '-f'
+        - 'http://127.0.0.1:3000'
+      interval: 2s
+      timeout: 10s
+      retries: 15
+    restart: unless-stopped
+
+  postgresql:
+    image: 'postgres:16-alpine'
+    volumes:
+      - 'forgejo-postgresql-data:/var/lib/postgresql/data'
+    environment:
+      - 'POSTGRES_USER=${SERVICE_USER_POSTGRESQL}'
+      - 'POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRESQL}'
+      - 'POSTGRES_DB=${POSTGRESQL_DATABASE}'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}'
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    restart: unless-stopped
+
+  forgejo-runner:
+    image: 'code.forgejo.org/forgejo/runner:8'
+    # Root is required to read the mounted Docker socket.
+    user: '0:0'
+    environment:
+      # Server-to-runner traffic stays on the internal network. Job
+      # containers clone over ROOT_URL instead, which is the public domain.
+      - 'FORGEJO_INSTANCE_URL=http://forgejo:3000'
+      # Never hardcode this. Set it in the Coolify Environment Variables tab;
+      # the token is a credential and this file is committed to git.
+      - 'FORGEJO_RUNNER_REGISTRATION_TOKEN=${FORGEJO_RUNNER_REGISTRATION_TOKEN}'
+      - FORGEJO_RUNNER_NAME=website-runner
+      # `node:22-bookworm` has no sudo and no standard build tooling, so most
+      # marketplace actions fail on it. The catthehacker images are the ones
+      # act/forgejo-runner expect for `ubuntu-latest`.
+      - 'FORGEJO_RUNNER_LABELS=node22:docker://node:22-bookworm,ubuntu-latest:docker://ghcr.io/catthehacker/ubuntu:act-22.04,docker:docker://ghcr.io/catthehacker/ubuntu:act-22.04'
+      - 'DOCKER_HOST=unix:///var/run/docker.sock'
+    volumes:
+      - 'forgejo-runner-data:/data'
+      - '/var/run/docker.sock:/var/run/docker.sock'
+    depends_on:
+      forgejo:
+        condition: service_healthy
+    # Every `$` below is doubled. Compose interpolates single-`$` names out of
+    # the YAML *before* the container starts, using the host environment, where
+    # these names do not exist — so `--instance ""` and registration fails with
+    # an unhelpful error. `$$` passes a literal `$` through to the shell.
+    command:
+      - sh
+      - '-c'
+      - |
+        set -e
+        if [ ! -f /data/.runner ]; then
+          forgejo-runner register --no-interactive \
+            --instance "$$FORGEJO_INSTANCE_URL" \
+            --token "$$FORGEJO_RUNNER_REGISTRATION_TOKEN" \
+            --name "$$FORGEJO_RUNNER_NAME" \
+            --labels "$$FORGEJO_RUNNER_LABELS"
+        fi
+        exec forgejo-runner daemon
+    restart: unless-stopped
+
+volumes:
+  forgejo-data:
+  forgejo-timezone:
+  forgejo-localtime:
+  forgejo-postgresql-data:
+  forgejo-runner-data:

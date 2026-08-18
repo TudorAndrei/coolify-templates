@@ -1,0 +1,49 @@
+services:
+  macro:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Daemonul Docker interior are nevoie de container privilegiat. Fără el
+    # stiva nu poate porni deloc.
+    privileged: true
+    environment:
+      - SERVICE_FQDN_MACRO_8090
+      - 'MACRO_REPO_URL=${MACRO_REPO_URL:-https://github.com/macro-inc/macro.git}'
+      - 'MACRO_REPO_REF=${MACRO_REPO_REF:-main}'
+      # `false` îngheață depozitul la commit-ul clonat; `true` aduce ref-ul la
+      # fiecare repornire.
+      - 'MACRO_AUTO_UPDATE=${MACRO_AUTO_UPDATE:-true}'
+      # Dotenv pe mai multe linii, suprapus peste mediul local definit în cod.
+      # Numai pentru integrări (chei AI etc.) — pornirea nu cere niciuna.
+      - 'MACRO_ENV_OVERLAY=${MACRO_ENV_OVERLAY:-}'
+    expose:
+      - '8090'
+    volumes:
+      # Imaginile și containerele stivei interioare. Cel mai mare volum: ~30 GB.
+      - 'macro-docker:/var/lib/docker'
+      # Depozitul plus directorul `target` al compilării Rust.
+      - 'macro-repo:/srv/macro/repo'
+      # Magazinul Nix, ca reconstruirea imaginii să nu redescarce lanțul de
+      # compilare.
+      - 'macro-nix:/nix'
+      # Cache-ul cargo/bun și profilul Nix.
+      - 'macro-home:/root'
+      - 'macro-env:/srv/macro/env'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'curl -fsS -o /dev/null http://localhost:8090/app/ || exit 1'
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # Prima pornire clonează depozitul și compilează tot spațiul de lucru
+      # Rust plus pachetul frontend. Pe o mașină obișnuită trece de o oră.
+      start_period: 7200s
+    restart: unless-stopped
+
+volumes:
+  macro-docker:
+  macro-repo:
+  macro-nix:
+  macro-home:
+  macro-env:

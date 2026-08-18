@@ -1,0 +1,48 @@
+services:
+  hermes:
+    image: 'nousresearch/hermes-agent:latest'
+    container_name: hermes
+    # PID 1 is /init (s6-overlay); it supervises the gateway and the
+    # dashboard and restarts them on crash. The command starts the gateway.
+    command:
+      - gateway
+      - run
+    environment:
+      # Coolify routes the domain to port 9119 (the web dashboard).
+      - SERVICE_FQDN_HERMES_9119
+      - HERMES_DASHBOARD=1
+      - HERMES_DASHBOARD_HOST=0.0.0.0
+      - HERMES_DASHBOARD_PORT=9119
+      # The dashboard is public through Traefik, so authentication is
+      # mandatory. Coolify generates the SERVICE_* values itself.
+      - 'HERMES_DASHBOARD_BASIC_AUTH_USERNAME=${SERVICE_USER_HERMES}'
+      - 'HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=${SERVICE_PASSWORD_HERMES}'
+      - 'HERMES_DASHBOARD_BASIC_AUTH_SECRET=${SERVICE_BASE64_HERMES}'
+      # The OpenAI-compatible API (port 8642) is off by default.
+      # To enable it, uncomment all three lines — the key is mandatory
+      # when the server listens on 0.0.0.0.
+      # - API_SERVER_ENABLED=true
+      # - API_SERVER_HOST=0.0.0.0
+      # - 'API_SERVER_KEY=${SERVICE_PASSWORD64_HERMESAPI}'
+    expose:
+      - '9119'
+      - '8642'
+    volumes:
+      # All state (config, .env, sessions, memories, skills, logs) lives in
+      # /opt/data. The install tree /opt/hermes is immutable.
+      - 'hermes-data:/opt/data'
+    healthcheck:
+      # TCP test on the dashboard port, with no dependency on curl/wget.
+      # The dashboard starts without configuration, so the container is
+      # "healthy" before `hermes setup`.
+      test:
+        - CMD-SHELL
+        - "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9119' || exit 1"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+
+volumes:
+  hermes-data:
