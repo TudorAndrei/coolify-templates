@@ -1,0 +1,8 @@
+ignored:
+  # DL3008 — "pin versions in apt-get install".
+  #
+  # macro/Dockerfile installs ca-certificates, curl and docker.io from Debian.
+  # Debian drops old point releases from the archive when a new one lands, so a
+  # pinned version makes the image stop building a few weeks later, for no gain
+  # in reproducibility — the base image tag already sets the release.
+  - DL3008

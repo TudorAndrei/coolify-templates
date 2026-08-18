@@ -1,0 +1,20 @@
+# Four dclint rules are turned off because they fight Coolify, not because the
+# findings are wrong in general. What is left still catches the real defects:
+# invalid compose syntax, duplicate keys, bad depends_on, port conflicts.
+rules:
+  # Coolify's own compose generator emits quoted volume strings. Unquoting them
+  # here means every file drifts from what Coolify writes back.
+  no-quotes-in-volumes: 0
+
+  # A Coolify service must not set `name:` — Coolify owns the project name and
+  # sets it from the resource.
+  require-project-name-field: 0
+
+  # `latest` is deliberate on the self-hosted apps that should track upstream.
+  # Pin an image in its own file when that service needs pinning; do not let a
+  # blanket rule decide it.
+  service-image-require-explicit-tag: 0
+
+  # Pure key-ordering style, and Coolify's generated compose does not follow it
+  # either. Reordering keys makes every diff unreadable for no gain.
+  service-keys-order: 0

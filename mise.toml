@@ -1,0 +1,23 @@
+[tools]
+hk = "1.55.0"
+pkl = "0.32.1"
+
+# Secret and key detection — the reason this pipeline exists.
+gitleaks = "latest"
+
+# Docker Compose files are the whole point of this repo.
+"npm:dclint" = "latest"
+hadolint = "latest"
+
+# macro/entrypoint.sh
+shellcheck = "latest"
+shfmt = "latest"
+
+# READMEs
+rumdl = "latest"
+
+[env]
+HK_MISE = 1
+
+[hooks]
+postinstall = "hk install --mise"

@@ -1,0 +1,11 @@
+# Markdown rules for this repository.
+#
+# Same house style as the parent vault: prose wraps at roughly 100 characters,
+# not 80, and the tables of Coolify variables cannot be wrapped at all.
+
+[global]
+disable = [
+  # Line length. All 13 findings on the first run were prose wrapped at ~90
+  # and table rows — a rule fighting the house style, not a set of defects.
+  "MD013",
+]

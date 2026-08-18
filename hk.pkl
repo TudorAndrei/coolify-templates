@@ -1,0 +1,69 @@
+amends "package://github.com/jdx/hk/releases/download/v1.55.0/hk@1.55.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v1.55.0/hk@1.55.0#/Builtins.pkl"
+
+local linters = new Mapping<String, Step | Group> {
+    // ── tier 1: gatekeepers. Read-only, so they all run in parallel. ──
+
+    // The two that matter most here. Every compose file in this repo is
+    // published publicly, and a Coolify template is exactly the kind of file
+    // where a real token gets pasted "just to test it" and then committed.
+    // `glob` is forced to `**/*` on both. Without it hk filters the file list
+    // per step, and a commit whose only file is filtered out leaves the step
+    // with zero files — hk then SKIPS the step and the commit goes through.
+    // Verified: a lone `secret.pem` holding an RSA private key committed
+    // cleanly until this glob was set.
+    ["gitleaks"] = (Builtins.gitleaks) { glob = List("**/*") }
+    ["detect-private-key"] = (Builtins.detect_private_key) { glob = List("**/*") }
+
+    ["check-merge-conflict"] = Builtins.check_merge_conflict
+    ["check-added-large-files"] = Builtins.check_added_large_files
+
+    // The repo is compose files and one Dockerfile; these are the real linters.
+    ["dclint"] = Builtins.dclint
+    ["hadolint"] = Builtins.hadolint
+
+    // ── tier 2: content fixers. ──
+    // `typos` is deliberately absent: the READMEs and the shell comments are
+    // in Romanian, and its dictionary is English. It would rewrite words like
+    // `nativ` into `native` on every commit.
+    ["rumdl"] = Builtins.rumdl
+
+    // ── tier 3: formatters. Each waits only on the fixer sharing its files. ──
+    ["rumdl-format"] = (Builtins.rumdl_format) { depends = List("rumdl") }
+    ["shfmt"] = Builtins.shfmt
+
+    // ── tier 4: whole-repo hygiene. One barrier, both steps inside it. ──
+    ["hygiene"] = new Group {
+        steps {
+            ["trailing-whitespace"] = Builtins.trailing_whitespace
+            ["newlines"] = Builtins.newlines
+        }
+    }
+
+    // ── tier 5: validators. Read-only, and they need the final bytes. ──
+    ["shellcheck"] = Builtins.shellcheck
+    ["pkl"] = Builtins.pkl
+}
+
+hooks {
+    ["pre-commit"] {
+        fix = true
+        stash = "git"
+        steps { ...linters }
+    }
+    ["commit-msg"] {
+        steps {
+            ["conventional-commit"] = Builtins.check_conventional_commit
+        }
+    }
+    ["pre-push"] {
+        // Check only — a secret must not reach GitHub even if the commit hook
+        // was bypassed with `--no-verify`.
+        steps { ...linters }
+    }
+    ["check"] { steps { ...linters } }
+    ["fix"] {
+        fix = true
+        steps { ...linters }
+    }
+}
