@@ -1,0 +1,91 @@
+services:
+  backend:
+    image: 'zimengxiong/excalidash-backend:0.5.1'
+    environment:
+      - NODE_ENV=production
+      - PORT=8000
+      # PostgreSQL, not the SQLite default. There is no data migration between
+      # the two providers, so this is a decision for the first deploy only.
+      - DATABASE_PROVIDER=postgresql
+      - 'DATABASE_URL=postgresql://${SERVICE_USER_POSTGRESQL}:${SERVICE_PASSWORD_POSTGRESQL}@postgresql:5432/${POSTGRESQL_DATABASE-excalidash}'
+      # Must match the address users type, or login and the collaboration
+      # socket both fail on origin checks.
+      - 'FRONTEND_URL=${SERVICE_URL_EXCALIDASH}'
+      # Two proxy hops sit in front: Coolify's Traefik, then the frontend
+      # nginx. Express counts back from the right of X-Forwarded-For, so a
+      # lower number makes rate limits see the proxy instead of the client.
+      - TRUST_PROXY=2
+      # `local` = email and password. Switch to `hybrid` or `oidc_enforced`
+      # once an identity provider exists; see the README.
+      - 'AUTH_MODE=${AUTH_MODE-local}'
+      # Fixed secrets. Left unset, the backend generates its own into the
+      # volume — every session and CSRF token then dies with the volume.
+      - 'JWT_SECRET=${SERVICE_PASSWORD_64_JWT}'
+      - 'CSRF_SECRET=${SERVICE_PASSWORD_64_CSRF}'
+    volumes:
+      # Prisma runtime state and the scheduled-backup directory. Small with
+      # the PostgreSQL provider, but it must survive a redeploy.
+      - 'excalidash-backend-data:/app/prisma'
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - '-e'
+        - "require('http').get('http://127.0.0.1:8000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  frontend:
+    image: 'zimengxiong/excalidash-frontend:0.5.1'
+    environment:
+      # Coolify routes the domain to port 80 and derives SERVICE_URL_EXCALIDASH
+      # from the same identifier. The backend reads that URL back as its
+      # allowed origin, so both sides always agree on the public address.
+      - SERVICE_URL_EXCALIDASH_80
+      # Nginx proxy target for /api/ and /socket.io/. Host and port only —
+      # the entrypoint substitutes it into nginx.conf, which adds the scheme.
+      - 'BACKEND_URL=backend:8000'
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      # IPv4 loopback explicitly; `localhost` can resolve to ::1 first and
+      # nginx listens on 0.0.0.0 only.
+      test:
+        - CMD
+        - wget
+        - '--quiet'
+        - '--tries=1'
+        - '--spider'
+        - 'http://127.0.0.1:80'
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  postgresql:
+    image: 'postgres:16-alpine'
+    environment:
+      - 'POSTGRES_USER=${SERVICE_USER_POSTGRESQL}'
+      - 'POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRESQL}'
+      - 'POSTGRES_DB=${POSTGRESQL_DATABASE-excalidash}'
+    volumes:
+      - 'excalidash-postgresql-data:/var/lib/postgresql/data'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}'
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  excalidash-backend-data:
+  excalidash-postgresql-data:
